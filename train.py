@@ -19,7 +19,7 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, amp,):
 
         images = images.unsqueeze(1)
 
-        print(images.shape)
+        # print(images.shape)
         assert images.shape[1] == model.n_channels, \
             f'Network has been defined with {model.n_channels} input channels, ' \
             f'but loaded images have {images.shape[1]} channels. Please check that ' \
