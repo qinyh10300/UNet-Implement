@@ -2,6 +2,7 @@ import os
 import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
+from .utils import rgb_mask_to_label
 
 class CustomSegmentationDataset(Dataset):
     def __init__(self, root_dir, transform=None, target_transform=None):
@@ -35,7 +36,7 @@ class CustomSegmentationDataset(Dataset):
     
     def __getitem__(self, idx):
         img_path, mask_path = self.image_mask_pairs[idx]
-        image = Image.open(img_path).convert('RGB')
+        image = Image.open(img_path)
         mask = Image.open(mask_path)
 
         if self.transform:
@@ -43,4 +44,11 @@ class CustomSegmentationDataset(Dataset):
         if self.target_transform:
             mask = self.target_transform(mask)
 
-        return image, mask
+        image_array = np.array(image)
+        mask_array = np.array(mask)
+
+        if len(image_array.shape) == 3:
+            image_array = image_array[:, :, 0]
+        mask_array = rgb_mask_to_label(mask_array)
+
+        return image_array, mask_array
