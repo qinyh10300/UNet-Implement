@@ -3,14 +3,13 @@ import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
 
 from models import *
 from utils import *
 
 def train_one_epoch(model, train_loader, optimizer, criterion, device, amp,):
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5)  # goal: maximize Dice score
-    grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
     criterion = nn.CrossEntropyLoss() if model.n_classes > 1 else nn.BCEWithLogitsLoss()
 
     model.train()
@@ -19,7 +18,7 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, amp,):
 
         images = images.unsqueeze(1)
 
-        print(images.shape)
+        # print(images.shape)
         assert images.shape[1] == model.n_channels, \
             f'Network has been defined with {model.n_channels} input channels, ' \
             f'but loaded images have {images.shape[1]} channels. Please check that ' \
@@ -30,24 +29,18 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, amp,):
 
         with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
             masks_pred = model(images)
-            if model.n_classes == 1:
-                loss = criterion(masks_pred.squeeze(1), true_masks.float())
-                loss += dice_loss(F.sigmoid(masks_pred.squeeze(1)), true_masks.float(), multiclass=False)
-            else:
-                loss = criterion(masks_pred, true_masks)
-                loss += dice_loss(
-                    F.softmax(masks_pred, dim=1).float(),
-                    F.one_hot(true_masks, model.n_classes).permute(0, 3, 1, 2).float(),
-                    multiclass=True
-                )
+            print(masks_pred.shape)
 
-        optimizer.zero_grad(set_to_none=True)
-        grad_scaler.scale(loss).backward()
-        grad_scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clipping)
-        grad_scaler.step(optimizer)
-        grad_scaler.update()
+            loss = criterion(masks_pred, true_masks)
+            loss += dice_loss(
+                F.softmax(masks_pred, dim=1).float(),
+                F.one_hot(true_masks, model.n_classes).permute(0, 3, 1, 2).float(),
+                multiclass=True
+            )
 
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
 def get_args():
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
