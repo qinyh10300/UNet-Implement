@@ -15,8 +15,11 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, amp,):
 
     model.train()
     for batch in train_loader:
-        images, true_masks = batch['image'], batch['mask']
+        images, true_masks = batch
 
+        images = images.unsqueeze(1)
+
+        print(images.shape)
         assert images.shape[1] == model.n_channels, \
             f'Network has been defined with {model.n_channels} input channels, ' \
             f'but loaded images have {images.shape[1]} channels. Please check that ' \
@@ -49,7 +52,7 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, amp,):
 def get_args():
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
     parser.add_argument('--epochs', type=int, default=20, help="Number of training epochs")
-    parser.add_argument('--batch_size', type=int, default=4, help="Batch size")
+    parser.add_argument('--batch_size', type=int, default=1, help="Batch size")
     parser.add_argument('--learning_rate', '-lr', type=float, default=1e-5, help="Learning rate")
     parser.add_argument('--n_channels', type=int, default=1, help="Number of channels of your photos")
     parser.add_argument('--classes', type=int, default=5, help="Number of classes")
@@ -63,6 +66,7 @@ if __name__ == "__main__":
     args = get_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"device: {device}")
 
     full_dataset = CustomSegmentationDataset(root_dir='./dataset/')
     n_val = int(len(full_dataset) * args.val_percent)
@@ -75,7 +79,7 @@ if __name__ == "__main__":
     model = UNet(n_channels=args.n_channels, n_classes=args.classes, base_channels=args.base_channels)
     model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate, betas=(0.9, 0.95))
     criterion = nn.CrossEntropyLoss() if model.n_classes > 1 else nn.BCEWithLogitsLoss()
 
     for epoch in range(args.epochs):

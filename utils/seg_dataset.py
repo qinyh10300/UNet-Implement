@@ -9,7 +9,7 @@ class CustomSegmentationDataset(Dataset):
         self.transform = transform
         self.target_transform = target_transform
         
-        all_pairs = []
+        self.image_mask_pairs = []  # 将 all_pairs 改为 self.image_mask_pairs
         for category in os.listdir(root_dir):
             category_path = os.path.join(root_dir, category)
             if not os.path.isdir(category_path):
@@ -29,7 +29,7 @@ class CustomSegmentationDataset(Dataset):
                 mask_path = os.path.join(mask_dir, mask_name)
                 
                 if os.path.exists(mask_path):
-                    all_pairs.append((image_path, mask_path))
+                    self.image_mask_pairs.append((image_path, mask_path))
     
     def __len__(self):
         return len(self.image_mask_pairs)

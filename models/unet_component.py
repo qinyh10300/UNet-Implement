@@ -6,6 +6,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+torch.backends.cudnn.enabled = False
+# 禁用 cudnn 加速 （否则报错）
+
 class DoubleConv(nn.Module):
     '''
     Double Convolution Block
