@@ -30,6 +30,7 @@ class DoubleConv(nn.Module):
         # TODO: add dropout
 
     def forward(self, x):
+        # print(x.shape)
         return self.double_conv(x)
     
 class DownBlock(nn.Module):
@@ -40,7 +41,7 @@ class DownBlock(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels=None):
         super().__init__()
         self.double_conv = DoubleConv(in_channels, out_channels, mid_channels)
-        self.max_pooling = nn.MaxPool2d(kernel_size=2),
+        self.max_pooling = nn.MaxPool2d(kernel_size=2)
 
     def forward(self, x):
         skip = self.double_conv(x)
@@ -54,8 +55,9 @@ class UpBlock(nn.Module):
     '''
     def __init__(self, in_channels, out_channels, mid_channels=None):
         super().__init__()
-        self.up_sampling = nn.ConvTranspose2d(in_channels=in_channels, out_channels=in_channels // 2, kernel_size=2, stride=2),
-        self.double_conv = DoubleConv(in_channels*2, out_channels, mid_channels)
+        # print(in_channels, out_channels)
+        self.up_sampling = nn.ConvTranspose2d(in_channels=in_channels, out_channels=in_channels // 2, kernel_size=2, stride=2)
+        self.double_conv = DoubleConv(in_channels, out_channels, mid_channels)
         # TODO: bilinear
 
     def forward(self, x, skip):
@@ -68,10 +70,14 @@ class UpBlock(nn.Module):
 
         pad_h = (diff_h // 2, diff_h - diff_h // 2)
         pad_w = (diff_w // 2, diff_w - diff_w // 2)
-        x = F.pad(x, [pad_w][0], pad_w[1], pad_h[0], pad_h[1])  #按照左、右、上、下的顺序进行padding
+        x = F.pad(x, [pad_w[0], pad_w[1], pad_h[0], pad_h[1]])  #按照左、右、上、下的顺序进行padding
         assert x.shape[2] == skip.shape[2] and x.shape[3] == skip.shape[3], "Physical dimensions of x and skip must be same"
         
-        return self.double_conv(torch.cat([x, skip], dim=1))   # 使用torch进行concat的用法
+        # print(x.shape, skip.shape)
+        x = torch.cat([x, skip], dim=1)   # 使用torch进行concat的用法
+        # print(x.shape)
+
+        return self.double_conv(x)
     
 class OutConv(nn.Module):
     def __init__(self, in_channels, out_channels):
