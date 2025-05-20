@@ -4,8 +4,15 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 color_to_label = {
+    (0, 0, 0): 0,  # 黑色：  background
     (0, 255, 0): 1,  # 绿色：  liugua
     (255, 170, 0): 2   # 棕色：  huahen
+}
+
+label_to_color = {
+    0: (0, 0, 0),  # 黑色：  background
+    1: (0, 255, 0),  # 绿色：  liugua
+    2: (255, 170, 0)   # 棕色：  huahen
 }
 
 def rgb_mask_to_label(mask_rgb):

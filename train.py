@@ -10,7 +10,7 @@ from pathlib import Path
 from models import *
 from utils import *
 
-def train_one_epoch(model, train_loader, optimizer, criterion, device, amp, gradient_clipping=1.0):
+def train_one_epoch(model, train_loader, optimizer, criterion, device, amp, args, gradient_clipping=1.0):
     model.train()
     epoch_loss = 0
     grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
@@ -32,7 +32,18 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, amp, grad
         # 使用混合精度
         with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
             masks_pred = model(images)
-            loss = criterion(masks_pred, true_masks)
+            # print(masks_pred.shape, true_masks.shape)
+            # mask_pred.shape = (b, c, h, w)
+            # true_masks.shape = (b, h, w)
+            loss1 = criterion(masks_pred, true_masks)
+            # CE损失函数会自动对pred进行softmax计算
+
+            masks_pred_softmax = F.softmax(masks_pred, dim=1).float()
+            true_masks_one_hot = F.one_hot(true_masks, num_class=model.n_classes)   # shape=(b, h, w, c)
+            true_masks_one_hot = true_masks_one_hot.permute(0, 3, 1, 2).float()   # shape=(b, c, h, w)
+            loss2 = dice_loss(masks_pred_softmax, true_masks_one_hot, multiclass=True)
+
+            loss = args.alpha1 * loss1 + args.alpha2 * loss2
             
         optimizer.zero_grad(set_to_none=True)    # 清空梯度
         grad_scaler.scale(loss).backward()    # 反向传播
@@ -41,7 +52,6 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, amp, grad
         grad_scaler.step(optimizer)    # 参数更新
         grad_scaler.update()
         
-        # 更新统计信息
         epoch_loss += loss.item()
         progress.set_postfix(loss=f'{epoch_loss / (i+1):.4f}')   # 在进度条的右侧添加当前的平均损失值信息
     
@@ -51,7 +61,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
     parser.add_argument('--epochs', type=int, default=20, help="Number of training epochs")
     parser.add_argument('--batch_size', type=int, default=1, help="Batch size")
-    parser.add_argument('--learning_rate', '-lr', type=float, default=1e-5, help="Learning rate")
+    parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3, help="Learning rate")
     parser.add_argument('--n_channels', type=int, default=1, help="Number of channels of your photos")
     parser.add_argument('--classes', type=int, default=6, help="Number of classes")
     parser.add_argument('--base_channels', type=int, default=4, help="Number of basic channels used in UNet")
@@ -60,6 +70,8 @@ def get_args():
     parser.add_argument('--amp', action='store_true', default=False, help='Use mixed precision')
     parser.add_argument('--save_ckpt_frequency', type=int, default=10, help='How many epoches to save a checkpoint')
     parser.add_argument('--dir_checkpoint', type=str, default="./checkpoints", help='Where to save checkpoints')
+    parser.add_argument('--alpha1', type=float, default=0.4, help='Hyperparameter Alpha 1')
+    parser.add_argument('--alpha2', type=float, default=0.6, help='Hyperparameter Alpha 2')
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -84,14 +96,16 @@ if __name__ == "__main__":
 
     for epoch in range(args.epochs):
         # Train
-        train_one_epoch(
-            model=model,
-            train_loader=train_loader,
-            optimizer=optimizer,
-            criterion=criterion,
-            device=device,
-            amp=args.amp
-        )
+        epoch_train_loss = train_one_epoch(
+                                model=model,
+                                train_loader=train_loader,
+                                optimizer=optimizer,
+                                criterion=criterion,
+                                device=device,
+                                amp=args.amp,
+                                args=args
+                            )
+        print(f"Training Loss: {epoch_train_loss} in Epoch-{epoch}")
 
         # # Eval
         # model.eval()
@@ -110,8 +124,10 @@ if __name__ == "__main__":
         # test_acc /= len(val_loader)
         # print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}")
 
-        if epoch % args.save_ckpt_frequency == 0 and epoch != 0:
+        if epoch == 0:
+            continue
+        if epoch % args.save_ckpt_frequency == 0 or epoch == args.epochs - 1:
             Path(args.dir_checkpoint).mkdir(parents=True, exist_ok=True)
             state_dict = model.state_dict()
-            torch.save(state_dict, str(args.dir_checkpoint / 'checkpoint_epoch{}.pth'.format(epoch)))
+            torch.save(state_dict, str(args.dir_checkpoint + '/checkpoint_epoch{}.pth'.format(epoch)))
             print(f'Checkpoint {epoch} saved!')
