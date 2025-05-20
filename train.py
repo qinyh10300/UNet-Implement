@@ -10,6 +10,42 @@ from pathlib import Path
 from models import *
 from utils import *
 
+@torch.inference_mode()   # 禁用反向传播，只进行前向计算
+def evaluate(model, val_loader, device, amp):
+    model.eval()
+
+    dice_score = 0
+    progress = tqdm.tqdm(enumerate(val_loader), total=len(val_loader), desc='Evaluation')
+    for i, batch in progress:
+        images, true_masks = batch
+
+        if len(images.shape) == 3:  # [B,H,W]对于单通道（灰度图）的情况
+            images = images.unsqueeze(1)  # [B,1,H,W]
+
+        assert images.shape[1] == model.n_channels, \
+            f'Network has been defined with {model.n_channels} input channels, ' \
+            f'but loaded images have {images.shape[1]} channels.'
+        
+        images = images.to(device=device, dtype=torch.float32, memory_format=torch.channels_last)
+        # memory_format=torch.channels_last不改变张量的维度布局，只改变内存中的存储顺序用于gpu加速
+        true_masks = true_masks.to(device=device, dtype=torch.long)
+
+        # 使用混合精度
+        with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
+            masks_pred = model(images)
+
+            # convert to one-hot format
+            true_masks_one_hot = F.one_hot(true_masks, num_classes=model.n_classes)   # shape=(b, h, w, c)
+            true_masks_one_hot = true_masks_one_hot.permute(0, 3, 1, 2).float()   # shape=(b, c, h, w)
+            masks_pred = F.one_hot(masks_pred.argmax(dim=1), num_classes=model.n_classes)  # shape=(b, h, w, c)
+            masks_pred = masks_pred.permute(0, 3, 1, 2).float()  # shape=(b, c, h, w)
+            
+            # compute the Dice score, `[:, 1:]` ignoring background
+            dice_score += multiclass_dice_coeff(masks_pred[:, 1:], true_masks_one_hot[:, 1:], reduce_batch_first=False)
+            # reduce_batch_first=False 决定是逐样本计算还是将整个批次作为一个整体计算
+
+    return dice_score / len(val_loader)   # dice_score分数越高越好
+
 def train_one_epoch(model, train_loader, optimizer, criterion, device, amp, args, gradient_clipping=1.0):
     model.train()
     epoch_loss = 0
@@ -35,11 +71,15 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, amp, args
             # print(masks_pred.shape, true_masks.shape)
             # mask_pred.shape = (b, c, h, w)
             # true_masks.shape = (b, h, w)
-            loss1 = criterion(masks_pred, true_masks)
-            # CE损失函数会自动对pred进行softmax计算
+            loss1 = criterion(masks_pred, true_masks)    # CE损失函数会自动对pred进行softmax计算
+
+            # 打印非零数值，检测mask有没有导入正确
+            # non_zero_mask = true_masks != 0
+            # non_zero_values = true_masks[non_zero_mask]
+            # print("非零值:", non_zero_values)
 
             masks_pred_softmax = F.softmax(masks_pred, dim=1).float()
-            true_masks_one_hot = F.one_hot(true_masks, num_class=model.n_classes)   # shape=(b, h, w, c)
+            true_masks_one_hot = F.one_hot(true_masks, num_classes=model.n_classes)   # shape=(b, h, w, c)
             true_masks_one_hot = true_masks_one_hot.permute(0, 3, 1, 2).float()   # shape=(b, c, h, w)
             loss2 = dice_loss(masks_pred_softmax, true_masks_one_hot, multiclass=True)
 
@@ -60,7 +100,7 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, amp, args
 def get_args():
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
     parser.add_argument('--epochs', type=int, default=20, help="Number of training epochs")
-    parser.add_argument('--batch_size', type=int, default=1, help="Batch size")
+    parser.add_argument('--batch_size', type=int, default=2, help="Batch size")
     parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3, help="Learning rate")
     parser.add_argument('--n_channels', type=int, default=1, help="Number of channels of your photos")
     parser.add_argument('--classes', type=int, default=6, help="Number of classes")
@@ -93,36 +133,26 @@ if __name__ == "__main__":
 
     optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate, betas=(0.9, 0.95))
     criterion = nn.CrossEntropyLoss() if model.n_classes > 1 else nn.BCEWithLogitsLoss()
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max', patience=5)  # goal: maximize Dice score
+    # 如果连续5个epochs所监听的指标没有提升（‘max’）,则自适应调整优化器optimizer（降低学习率）
 
     for epoch in range(args.epochs):
-        # Train
+        # ******************Train******************
         epoch_train_loss = train_one_epoch(
-                                model=model,
-                                train_loader=train_loader,
-                                optimizer=optimizer,
-                                criterion=criterion,
-                                device=device,
-                                amp=args.amp,
-                                args=args
-                            )
+            model=model,
+            train_loader=train_loader,
+            optimizer=optimizer,
+            criterion=criterion,
+            device=device,
+            amp=args.amp,
+            args=args
+        )
         print(f"Training Loss: {epoch_train_loss} in Epoch-{epoch}")
 
-        # # Eval
-        # model.eval()
-        # test_loss = 0
-        # test_acc = 0
-        
-        # with torch.no_grad():
-        #     for images, masks in val_loader:
-        #         images, masks = images.to(device), masks.to(device)
-        #         outputs = model(images)
-        #         loss = combined_loss(outputs, masks)
-        #         test_loss += loss.item()
-        #         test_acc += (outputs.round() == masks).float().mean().item()
-        
-        # test_loss /= len(val_loader)
-        # test_acc /= len(val_loader)
-        # print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}")
+        # ******************Eval******************
+        val_score = evaluate(model, val_loader, device, args.amp)
+        scheduler.step(val_score)
+        print(f"Evaluation Dice score: {val_score} in Epoch-{epoch}")
 
         if epoch == 0:
             continue

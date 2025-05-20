@@ -9,6 +9,7 @@ import os
 from models import UNet
 from utils import label_to_color
 
+@torch.inference_mode()   # 禁用反向传播，只进行前向计算
 def predict_image(model, image_path, output_dir, device, visualize=True):
     image_name = os.path.basename(image_path)
     base_name = os.path.splitext(image_name)[0]
