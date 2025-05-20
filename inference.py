@@ -37,6 +37,10 @@ def predict_image(model, image_path, output_dir, device, visualize=True):
     colored_mask = np.zeros((mask.shape[0], mask.shape[1], 3), dtype=np.uint8)
     for label, color in label_to_color.items():
         colored_mask[mask == label] = color
+        # # 打印非零数值，检测结果
+        # non_zero_mask = mask != 0
+        # non_zero_values = mask[non_zero_mask]
+        # print("非零值:", non_zero_values)
 
     mask_path = os.path.join(output_dir, f"{base_name}_mask.png")
     Image.fromarray(colored_mask).save(mask_path)
@@ -45,8 +49,8 @@ def predict_image(model, image_path, output_dir, device, visualize=True):
 
 def get_args():
     parser = argparse.ArgumentParser(description="UNet模型推理")
-    parser.add_argument('--checkpoint', type=str, default="checkpoints/checkpoint_epoch10.pth", help="模型检查点路径")
-    parser.add_argument('--input', type=str, default="dataset/liugua/liugua/liugua_3.png", help="输入图像路径或包含图像的目录")
+    parser.add_argument('--checkpoint', type=str, default="checkpoints/checkpoint_epoch19.pth", help="模型检查点路径")
+    parser.add_argument('--input', type=str, default="dataset/huahen/huahen/huahen_0.png", help="输入图像路径或包含图像的目录")
     parser.add_argument('--output', type=str, default="./output", help="输出结果保存目录")
     parser.add_argument('--n_channels', type=int, default=1, help="输入通道数")
     parser.add_argument('--classes', type=int, default=6, help="类别数（包括背景）")
