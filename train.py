@@ -5,11 +5,12 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, random_split
+from pathlib import Path
 
 from models import *
 from utils import *
 
-def train_one_epoch(model, train_loader, optimizer, criterion, device, amp):
+def train_one_epoch(model, train_loader, optimizer, criterion, device, amp, gradient_clipping=1.0):
     model.train()
     epoch_loss = 0
     grad_scaler = torch.cuda.amp.GradScaler(enabled=amp)
@@ -28,28 +29,21 @@ def train_one_epoch(model, train_loader, optimizer, criterion, device, amp):
         images = images.to(device=device, dtype=torch.float32)
         true_masks = true_masks.to(device=device, dtype=torch.long)
         
-        # 清空梯度
-        optimizer.zero_grad(set_to_none=True)
-        
         # 使用混合精度
         with torch.autocast(device.type if device.type != 'mps' else 'cpu', enabled=amp):
             masks_pred = model(images)
             loss = criterion(masks_pred, true_masks)
             
-        # 反向传播
-        grad_scaler.scale(loss).backward()
-        
-        # 梯度裁剪（可选）
-        grad_scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        
-        # 参数更新
-        grad_scaler.step(optimizer)
+        optimizer.zero_grad(set_to_none=True)    # 清空梯度
+        grad_scaler.scale(loss).backward()    # 反向传播
+        grad_scaler.unscale_(optimizer)    # 梯度裁剪（可选）
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradient_clipping)
+        grad_scaler.step(optimizer)    # 参数更新
         grad_scaler.update()
         
         # 更新统计信息
         epoch_loss += loss.item()
-        progress.set_postfix(loss=f'{epoch_loss / (i+1):.4f}')
+        progress.set_postfix(loss=f'{epoch_loss / (i+1):.4f}')   # 在进度条的右侧添加当前的平均损失值信息
     
     return epoch_loss / len(train_loader)
 
@@ -64,6 +58,8 @@ def get_args():
     parser.add_argument('--random_seed', type=int, default=42, help="Random seed to spilce dataset")
     parser.add_argument('--val_percent', type=float, default=0.2, help="evaluation percent of total dataset")
     parser.add_argument('--amp', action='store_true', default=False, help='Use mixed precision')
+    parser.add_argument('--save_ckpt_frequency', type=int, default=10, help='How many epoches to save a checkpoint')
+    parser.add_argument('--dir_checkpoint', type=str, default="./checkpoints", help='Where to save checkpoints')
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -114,3 +110,8 @@ if __name__ == "__main__":
         # test_acc /= len(val_loader)
         # print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}")
 
+        if epoch % args.save_ckpt_frequency == 0 and epoch != 0:
+            Path(args.dir_checkpoint).mkdir(parents=True, exist_ok=True)
+            state_dict = model.state_dict()
+            torch.save(state_dict, str(args.dir_checkpoint / 'checkpoint_epoch{}.pth'.format(epoch)))
+            print(f'Checkpoint {epoch} saved!')
