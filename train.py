@@ -148,19 +148,19 @@ def mask_to_rgb(mask):
 
 def get_args():
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
-    parser.add_argument('--epochs', type=int, default=20, help="Number of training epochs")
+    parser.add_argument('--epochs', type=int, default=400, help="Number of training epochs")
     parser.add_argument('--batch_size', type=int, default=2, help="Batch size")
-    parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3, help="Learning rate")
+    parser.add_argument('--learning_rate', '-lr', type=float, default=1e-4, help="Learning rate")
     parser.add_argument('--n_channels', type=int, default=1, help="Number of channels of your photos")
     parser.add_argument('--classes', type=int, default=6, help="Number of classes")
     parser.add_argument('--base_channels', type=int, default=4, help="Number of basic channels used in UNet")
     parser.add_argument('--random_seed', type=int, default=42, help="Random seed to spilce dataset")
     parser.add_argument('--val_percent', type=float, default=0.2, help="evaluation percent of total dataset")
     parser.add_argument('--amp', action='store_true', default=False, help='Use mixed precision')
-    parser.add_argument('--save_ckpt_frequency', type=int, default=10, help='How many epoches to save a checkpoint')
-    parser.add_argument('--dir_checkpoint', type=str, default="./checkpoints", help='Where to save checkpoints')
-    parser.add_argument('--alpha1', type=float, default=0.4, help='Hyperparameter Alpha 1')
-    parser.add_argument('--alpha2', type=float, default=0.6, help='Hyperparameter Alpha 2')
+    parser.add_argument('--save_ckpt_frequency', type=int, default=50, help='How many epoches to save a checkpoint')
+    parser.add_argument('--dir_checkpoint', type=str, default="./checkpoints_2", help='Where to save checkpoints')
+    parser.add_argument('--alpha1', type=float, default=0.7, help='Hyperparameter Alpha 1')
+    parser.add_argument('--alpha2', type=float, default=0.3, help='Hyperparameter Alpha 2')
     return parser.parse_args()
 
 if __name__ == "__main__":
