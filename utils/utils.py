@@ -6,13 +6,19 @@ from PIL import Image
 color_to_label = {
     (0, 0, 0): 0,  # 黑色：  background
     (0, 255, 0): 1,  # 绿色：  liugua
-    (255, 170, 0): 2   # 棕色：  huahen
+    (255, 170, 0): 2,   # 棕色：  huahen
+    (0, 255, 127): 3,   # madian
+    (255, 255, 0): 4,   # qipao
+    (238, 130, 238): 5,   # yuyan
 }
 
 label_to_color = {
     0: (0, 0, 0),  # 黑色：  background
     1: (0, 255, 0),  # 绿色：  liugua
-    2: (255, 170, 0)   # 棕色：  huahen
+    2: (255, 170, 0),   # 棕色：  huahen
+    3: (0, 255, 127),   # madian
+    4: (255, 255, 0),   # qipao
+    5: (238, 130, 238),   # yuyan
 }
 
 def rgb_mask_to_label(mask_rgb):

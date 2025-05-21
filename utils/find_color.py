@@ -136,7 +136,8 @@ def plot_color_distribution(color_counts, top_n=10):
 
 if __name__ == "__main__":
     # 使用示例
-    image_path = 'dataset/huahen/huahen_target/huahen_target_7.png'
+    # image_path = 'dataset/huahen/huahen_target/huahen_target_7.png'
+    image_path = '/home/qinyihua/SegData/yuyan/yuyan_target/yuyan_target_737.png'
     # image_path = 'dataset/liugua/liugua_target/liugua_target_3.png'
     color_counts = analyze_color_distribution(image_path)
     

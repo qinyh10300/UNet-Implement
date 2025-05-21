@@ -135,9 +135,12 @@ def record_prediction_examples(model, val_loader, epoch, writer, device, amp):
 def mask_to_rgb(mask):
     """将标签掩码转换为 RGB 彩色图像"""
     label_to_color = {
-        0: (0, 0, 0),      # 黑色： background
-        1: (0, 255, 0),    # 绿色： liugua
-        2: (255, 170, 0),  # 棕色： huahen
+        0: (0, 0, 0),  # 黑色：  background
+        1: (0, 255, 0),  # 绿色：  liugua
+        2: (255, 170, 0),   # 棕色：  huahen
+        3: (0, 255, 127),   # madian
+        4: (255, 255, 0),   # qipao
+        5: (238, 130, 238),   # yuyan
     }
     
     rgb = np.zeros((mask.shape[0], mask.shape[1], 3), dtype=np.uint8)
@@ -148,16 +151,16 @@ def mask_to_rgb(mask):
 
 def get_args():
     parser = argparse.ArgumentParser(description="Train the UNet on images and target masks")
-    parser.add_argument('--epochs', type=int, default=400, help="Number of training epochs")
-    parser.add_argument('--batch_size', type=int, default=2, help="Batch size")
+    parser.add_argument('--epochs', type=int, default=100, help="Number of training epochs")
+    parser.add_argument('--batch_size', type=int, default=4, help="Batch size")
     parser.add_argument('--learning_rate', '-lr', type=float, default=1e-4, help="Learning rate")
     parser.add_argument('--n_channels', type=int, default=1, help="Number of channels of your photos")
     parser.add_argument('--classes', type=int, default=6, help="Number of classes")
-    parser.add_argument('--base_channels', type=int, default=4, help="Number of basic channels used in UNet")
+    parser.add_argument('--base_channels', type=int, default=8, help="Number of basic channels used in UNet")
     parser.add_argument('--random_seed', type=int, default=42, help="Random seed to spilce dataset")
     parser.add_argument('--val_percent', type=float, default=0.2, help="evaluation percent of total dataset")
     parser.add_argument('--amp', action='store_true', default=False, help='Use mixed precision')
-    parser.add_argument('--save_ckpt_frequency', type=int, default=50, help='How many epoches to save a checkpoint')
+    parser.add_argument('--save_ckpt_frequency', type=int, default=5, help='How many epoches to save a checkpoint')
     parser.add_argument('--dir_checkpoint', type=str, default="./checkpoints_2", help='Where to save checkpoints')
     parser.add_argument('--alpha1', type=float, default=0.7, help='Hyperparameter Alpha 1')
     parser.add_argument('--alpha2', type=float, default=0.3, help='Hyperparameter Alpha 2')
@@ -178,7 +181,7 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"device: {device}")
 
-    full_dataset = CustomSegmentationDataset(root_dir='./dataset/')
+    full_dataset = CustomSegmentationDataset(root_dir='/home/qinyihua/SegData/')
     n_val = int(len(full_dataset) * args.val_percent)
     n_train = len(full_dataset) - n_val
     train_dataset, val_dataset = random_split(full_dataset, [n_train, n_val], generator=torch.Generator().manual_seed(args.random_seed))
